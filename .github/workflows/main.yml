@@ -1,0 +1,68 @@
+# .github/workflows/build-windows.yml
+
+name: Build PiliPlus for Windows
+
+# 控制工作流触发的条件
+on:
+  # 允许你从 Actions 标签页手动触发此工作流
+  workflow_dispatch:
+  # 当 main 分支有 push 操作时也会触发
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # 指定运行环境为最新的 Windows Server
+    runs-on: windows-latest
+
+    steps:
+      # 步骤 1: 检出你的代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 步骤 2: 设置 vcpkg (一个 C++ 库管理器，用来处理依赖)
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          # 指定 vcpkg 安装依赖的目标平台
+          vcpkgTriplet: x64-windows
+
+      # 步骤 3: 使用 vcpkg 安装项目所需的依赖库
+      # PiliPlus 的 CMakeLists.txt 中定义了这些依赖
+      - name: Install dependencies
+        run: |
+          vcpkg install curl nlohmann-json flac openssl zlib
+
+      # 步骤 4: 配置 CMake
+      # -B build: 指定构建目录为 build
+      # -S .: 指定源代码目录为当前目录
+      # -DCMAKE_TOOLCHAIN_FILE: 告诉 CMake 使用 vcpkg 的工具链文件来查找依赖
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+      # 步骤 5: 构建项目 (编译)
+      # --config Release: 编译为发布版本，性能更好
+      - name: Build project
+        run: |
+          cmake --build build --config Release
+
+      # 步骤 6: 打包可执行文件和所需的 DLL
+      - name: Package artifacts
+        shell: pwsh
+        run: |
+          # 创建一个用于打包的目录
+          mkdir release
+          # 将编译好的 exe 复制过来
+          cp build/Release/PiliPlus.exe ./release/
+          # 将依赖的 DLL 从 vcpkg 的安装目录中复制过来
+          # 使用 Get-VcpkgDLLs 函数 (由 lukka/run-vcpkg 提供) 自动查找并复制
+          Get-VcpkgDLLs -dest ./release/ -buildDir ./build/
+
+      # 步骤 7: 上传构建产物
+      # 这样你就可以在 Actions 页面下载编译好的文件了
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiliPlus-Windows
+          path: release/
