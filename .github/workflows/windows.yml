@@ -1,0 +1,42 @@
+name: Build for Windows
+
+on:
+  pull_request:
+        types:
+          - opened
+          - synchronize
+          - reopened
+          - ready_for_review
+        paths-ignore:
+          - '**.md'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: 代码迁出
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+
+      - name: 下载项目依赖
+        run: flutter pub get
+
+      - name: 构建 Windows 可执行文件
+        run: |
+          flutter build windows --release
+          Compress-Archive -Path build\windows\runner\Release\* -DestinationPath PiliPlus-windows-x64.zip
+
+      - name: 上传
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiliPlus-windows-x64
+          path: PiliPlus-windows-x64.zip
